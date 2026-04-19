@@ -94,7 +94,11 @@ onMounted(async () => {
 .songbook-container {
   max-width: 900px;
   margin: 0 auto;
-  padding: 2em 1.5em;
+  padding: 0 1.5em 1em;
+}
+
+.songbook-page:first-child .song-title {
+  margin-top: 0.5em;
 }
 
 .songbook-page {
