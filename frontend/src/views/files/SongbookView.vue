@@ -19,7 +19,7 @@
     </div>
 
     <!-- Paginated mode: one sub-page at a time, no scrollbar -->
-    <div v-else-if="layoutStore.songbookPaginated" class="songbook-page-full" ref="pageRef">
+    <div v-else-if="layoutStore.songbookPaginated && !layoutStore.songbookDualPage" class="songbook-page-full" ref="pageRef">
       <div v-if="currentSubPage" class="songbook-page-full-inner">
         <div class="cifra-content" ref="contentRef">
           <div
@@ -27,6 +27,33 @@
             :key="lineIndex"
             :class="line.isChord ? 'chord-line' : 'lyric-line'"
           >{{ line.text || '\u00A0' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dual-page mode: two sub-pages side by side, no scrollbar -->
+    <div v-else-if="layoutStore.songbookPaginated && layoutStore.songbookDualPage" class="songbook-dual-wrapper" ref="pageRef">
+      <div class="songbook-page-full songbook-page-col">
+        <div v-if="leftSubPage" class="songbook-page-full-inner">
+          <div class="cifra-content" ref="contentRef">
+            <div
+              v-for="(line, lineIndex) in leftSubPage.lines"
+              :key="lineIndex"
+              :class="line.isChord ? 'chord-line' : 'lyric-line'"
+            >{{ line.text || '\u00A0' }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="songbook-page-col-divider"></div>
+      <div class="songbook-page-full songbook-page-col">
+        <div v-if="rightSubPage" class="songbook-page-full-inner">
+          <div class="cifra-content">
+            <div
+              v-for="(line, lineIndex) in rightSubPage.lines"
+              :key="lineIndex"
+              :class="line.isChord ? 'chord-line' : 'lyric-line'"
+            >{{ line.text || '\u00A0' }}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -83,6 +110,11 @@ interface SubPage {
   totalSubPages: number;
 }
 
+interface Spread {
+  left: SubPage;
+  right: SubPage | null;
+}
+
 const songs = ref<Song[]>([]);
 const loading = ref(true);
 const probeRef = ref<HTMLElement | null>(null);
@@ -136,9 +168,8 @@ async function measureAndBuild() {
   for (const song of songs.value) {
     const lines = parsedLines(song.content);
     const chunks: ParsedLine[][] = [];
-    // Returns the index of the chord line that starts the block containing
-    // lines[pos], or pos itself if no chord is found above.
-    // A "block" is a chord line followed by consecutive non-empty lyric lines.
+    // Returns the chord line that starts the block containing lines[pos],
+    // or pos itself if no chord is found above within the current chunk.
     const findBlockStart = (pos: number, chunkStart: number): number => {
       let p = pos;
       while (p > chunkStart && !lines[p].isChord && lines[p].text.trim()) {
@@ -151,41 +182,29 @@ async function measureAndBuild() {
     while (i < lines.length) {
       let end = Math.min(i + linesPerPage, lines.length);
 
-      // 1. Strip trailing empty lines
-      let trimmed = end;
-      while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
-        trimmed--;
-      }
-
-      // 2. Strip trailing chord lines (and repeat empty strip)
-      while (trimmed > i + 1 && lines[trimmed - 1].isChord) {
-        trimmed--;
-        while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
-          trimmed--;
+      // Only adjust the cut if there is more content after it.
+      if (end < lines.length) {
+        // Find the first non-empty line after the cut point.
+        let nextContent = end;
+        while (nextContent < lines.length && !lines[nextContent].text.trim()) {
+          nextContent++;
         }
-      }
-
-      // 3. If the very next line (that didn't fit) is a non-empty lyric that
-      //    belongs to the same chord-block as the last line on this page,
-      //    move the cut back to the chord that started that block — keeping
-      //    chord + ALL its lyrics together on the next page.
-      if (
-        trimmed < lines.length &&
-        lines[trimmed].text.trim() &&
-        !lines[trimmed].isChord
-      ) {
-        const blockStart = findBlockStart(trimmed - 1, i);
-        if (blockStart > i) {
-          // Only move back if we'd still have content on this page
-          trimmed = blockStart;
-          // Re-strip any empties that are now at the tail
-          while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
-            trimmed--;
+        // If that next non-empty line is a lyric (not a chord), it might
+        // belong to a chord-block that started inside this chunk → move the
+        // cut back to before that chord so the block stays together.
+        if (nextContent < lines.length && !lines[nextContent].isChord) {
+          const blockStart = findBlockStart(end - 1, i);
+          if (blockStart > i) {
+            end = blockStart;
+            // Strip any trailing empty lines that are now at the tail.
+            while (end > i + 1 && !lines[end - 1].text.trim()) {
+              end--;
+            }
           }
         }
       }
 
-      end = trimmed;
+      if (end <= i) end = i + 1; // safety: always make progress
       chunks.push(lines.slice(i, end));
       i = end;
     }
@@ -200,7 +219,19 @@ async function measureAndBuild() {
     });
   }
   subPages.value = result;
-  layoutStore.songbookTotalPages = result.length;
+  // Count spreads for dual-page mode: consecutive same-song pages pair up
+  if (layoutStore.songbookDualPage) {
+    let spreadCount = 0;
+    let si = 0;
+    while (si < result.length) {
+      const next = result[si + 1];
+      spreadCount++;
+      si += (next && next.title === result[si].title) ? 2 : 1;
+    }
+    layoutStore.songbookTotalPages = spreadCount;
+  } else {
+    layoutStore.songbookTotalPages = result.length;
+  }
   probeLines.value = []; // clear probe
 }
 
@@ -214,9 +245,39 @@ function attachResizeObserver() {
   resizeObserver.observe(pageRef.value);
 }
 
+// Pre-computed spreads for dual-page mode: each spread keeps both pages
+// from the same song together; if a song has an odd number of sub-pages
+// the last spread has right=null.
+const spreads = computed<Spread[]>(() => {
+  const result: Spread[] = [];
+  let i = 0;
+  while (i < subPages.value.length) {
+    const left = subPages.value[i];
+    const right = subPages.value[i + 1];
+    if (right && right.title === left.title) {
+      result.push({ left, right });
+      i += 2;
+    } else {
+      result.push({ left, right: null });
+      i += 1;
+    }
+  }
+  return result;
+});
+
 const currentSubPage = computed(() => {
+  if (layoutStore.songbookDualPage) {
+    const spread = spreads.value[Math.min(layoutStore.songbookPage, spreads.value.length - 1)];
+    return spread?.left ?? null;
+  }
   const page = Math.min(layoutStore.songbookPage, subPages.value.length - 1);
   return subPages.value[page] ?? null;
+});
+
+const leftSubPage = computed(() => currentSubPage.value);
+const rightSubPage = computed(() => {
+  const spread = spreads.value[Math.min(layoutStore.songbookPage, spreads.value.length - 1)];
+  return spread?.right ?? null;
 });
 
 watch(currentSubPage, (page) => {
@@ -250,6 +311,16 @@ watch(() => layoutStore.songbookPaginated, async (val) => {
   } else {
     resizeObserver?.disconnect();
     probeLines.value = [];
+  }
+});
+
+watch(() => layoutStore.songbookDualPage, async () => {
+  if (layoutStore.songbookPaginated) {
+    layoutStore.songbookPage = 0;
+    measuredLinesPerPage = 0;
+    await nextTick();
+    attachResizeObserver();
+    await measureAndBuild();
   }
 });
 
@@ -436,6 +507,36 @@ body.songbook-paginated .songbook-wrapper {
   border: none;
   border-top: 1px dashed #444;
   margin: 2em 0;
+}
+
+/* Dual-page: two columns side by side */
+.songbook-dual-wrapper {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 0.5em;
+  gap: 0;
+}
+
+body.songbook-paginated .songbook-dual-wrapper {
+  padding: 0;
+}
+
+.songbook-page-col {
+  flex: 1;
+  min-width: 0;
+  padding: 0 1em;
+  max-width: none;
+  margin: 0;
+}
+
+.songbook-page-col-divider {
+  width: 1px;
+  background: #444;
+  align-self: stretch;
+  flex-shrink: 0;
 }
 
 @media print {

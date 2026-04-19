@@ -7,31 +7,43 @@
     />
 
     <breadcrumbs base="/files">
-      <template v-if="layoutStore.songbookMode && layoutStore.songbookPaginated" #title>
+      <template v-if="layoutStore.songbookMode && (layoutStore.songbookPaginated)" #title>
         <span class="songbook-breadcrumb-title">{{ layoutStore.songbookCurrentTitle }}</span>
       </template>
       <template v-if="layoutStore.songbookMode" #actions>
         <action
           icon="arrow_back"
           label="Back"
-          @action="layoutStore.songbookMode = false"
+          @action="layoutStore.songbookMode = false; layoutStore.songbookPaginated = false; layoutStore.songbookDualPage = false"
         />
         <action
           v-if="layoutStore.songbookPaginated"
           icon="chevron_left"
-          label="Previous song"
+          label="Previous"
           @action="layoutStore.songbookPage = Math.max(0, layoutStore.songbookPage - 1)"
         />
         <action
           v-if="layoutStore.songbookPaginated"
           icon="chevron_right"
-          label="Next song"
+          label="Next"
           @action="layoutStore.songbookPage = Math.min(layoutStore.songbookTotalPages - 1, layoutStore.songbookPage + 1)"
         />
         <action
-          :icon="layoutStore.songbookPaginated ? 'view_agenda' : 'article'"
-          :label="layoutStore.songbookPaginated ? 'Continuous view' : 'Paginated view'"
-          @action="layoutStore.songbookPaginated = !layoutStore.songbookPaginated; layoutStore.songbookPage = 0"
+          :icon="!layoutStore.songbookPaginated ? 'article' : layoutStore.songbookDualPage ? 'view_agenda' : 'auto_stories'"
+          :label="!layoutStore.songbookPaginated ? 'Paginated view' : layoutStore.songbookDualPage ? 'Continuous view' : 'Dual-page view'"
+          @action="(() => {
+            if (!layoutStore.songbookPaginated) {
+              layoutStore.songbookPaginated = true;
+              layoutStore.songbookDualPage = false;
+              layoutStore.songbookPage = 0;
+            } else if (!layoutStore.songbookDualPage) {
+              layoutStore.songbookDualPage = true;
+            } else {
+              layoutStore.songbookPaginated = false;
+              layoutStore.songbookDualPage = false;
+              layoutStore.songbookPage = 0;
+            }
+          })()"
         />
         <action
           icon="print"
@@ -154,6 +166,8 @@ onUnmounted(() => {
 
 watch(route, () => {
   layoutStore.songbookMode = false;
+  layoutStore.songbookPaginated = false;
+  layoutStore.songbookDualPage = false;
   fetchData();
 });
 watch(reload, (newValue) => {

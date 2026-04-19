@@ -10,6 +10,7 @@ export const useLayoutStore = defineStore("layout", {
     showShell: boolean | null;
     songbookMode: boolean;
     songbookPaginated: boolean;
+    songbookDualPage: boolean;
     songbookPage: number;
     songbookCurrentTitle: string;
     songbookTotalPages: number;
@@ -19,6 +20,7 @@ export const useLayoutStore = defineStore("layout", {
     showShell: false,
     songbookMode: false,
     songbookPaginated: false,
+    songbookDualPage: false,
     songbookPage: 0,
     songbookCurrentTitle: "",
     songbookTotalPages: 0,
