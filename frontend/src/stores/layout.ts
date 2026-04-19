@@ -8,10 +8,12 @@ export const useLayoutStore = defineStore("layout", {
     loading: boolean;
     prompts: PopupProps[];
     showShell: boolean | null;
+    songbookMode: boolean;
   } => ({
     loading: false,
     prompts: [],
     showShell: false,
+    songbookMode: false,
   }),
   getters: {
     currentPrompt(state) {

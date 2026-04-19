@@ -9,13 +9,13 @@
     <breadcrumbs base="/files" />
     <errors v-if="error" :errorCode="error.status" />
     <songbook-view
-      v-else-if="songbookMode && fileStore.req?.isDir"
-      @exit="songbookMode = false"
+      v-else-if="layoutStore.songbookMode && fileStore.req?.isDir"
+      @exit="layoutStore.songbookMode = false"
     />
     <component
       v-else-if="currentView"
       :is="currentView"
-      @songbook="songbookMode = true"
+      @songbook="layoutStore.songbookMode = true"
     ></component>
     <div v-else>
       <h2 class="message delayed">
@@ -55,7 +55,7 @@ import SongbookView from "@/views/files/SongbookView.vue";
 import { StatusError } from "@/api/utils";
 import { name } from "../utils/constants";
 
-const songbookMode = ref(false);
+
 
 const Editor = defineAsyncComponent(() => import("@/views/files/Editor.vue"));
 const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
@@ -117,7 +117,7 @@ onUnmounted(() => {
 });
 
 watch(route, () => {
-  songbookMode.value = false;
+  layoutStore.songbookMode = false;
   fetchData();
 });
 watch(reload, (newValue) => {

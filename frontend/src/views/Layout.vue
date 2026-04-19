@@ -7,8 +7,8 @@
         }"
       ></div>
     </div>
-    <sidebar></sidebar>
-    <main>
+    <sidebar v-if="!layoutStore.songbookMode"></sidebar>
+    <main :class="{ 'songbook-mode': layoutStore.songbookMode }">
       <router-view></router-view>
       <shell
         v-if="

@@ -92,6 +92,11 @@ main {
   width: calc(100% - 19em);
 }
 
+main.songbook-mode {
+  width: 100%;
+  margin: 0;
+}
+
 .breadcrumbs {
   height: 3em;
   background: var(--background);
