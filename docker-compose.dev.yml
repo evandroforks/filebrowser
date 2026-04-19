@@ -1,0 +1,23 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: dev.Dockerfile
+    container_name: filebrowser-dev
+    volumes:
+      - .:/app
+      - go-mod-cache:/root/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+      - node-modules:/app/frontend/node_modules
+    ports:
+      - "8080:8080"   # backend
+      - "5173:5173"   # vite dev server
+      - "2345:2345"   # delve debugger
+    environment:
+      - CGO_ENABLED=0
+    working_dir: /app
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
+  node-modules:

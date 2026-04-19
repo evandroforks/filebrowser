@@ -33,6 +33,27 @@ tasks:
       - task: build:frontend
       - task: build:backend
 
+  dev:frontend:
+    desc: Start Vite dev server with hot-reload (no typecheck, no minification)
+    dir: frontend
+    cmds:
+      - pnpm run dev --host
+
+  dev:backend:
+    desc: Build and run backend only (no frontend build)
+    cmds:
+      - go build -o filebrowser .
+      - ./filebrowser --address 0.0.0.0
+    vars:
+      GIT_COMMIT:
+        sh: git log -n 1 --format=%h
+
+  dev:
+    desc: Start frontend dev server and backend concurrently
+    deps:
+      - dev:frontend
+      - dev:backend
+
   release:make:
     internal: true
     prompt: Do you wish to proceed?
@@ -66,7 +87,7 @@ tasks:
 
   docs:docker:generate:
     internal: true
-    cmds: 
+    cmds:
       - docker build -f www/Dockerfile --progress=plain -t filebrowser.site www
 
   docs:
