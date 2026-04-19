@@ -1,20 +1,25 @@
 <template>
   <div class="breadcrumbs">
-    <component
-      :is="element"
-      :to="base || ''"
-      :aria-label="t('files.home')"
-      :title="t('files.home')"
-    >
-      <i class="material-icons">home</i>
-    </component>
-
-    <span v-for="(link, index) in items" :key="index">
-      <span class="chevron"
-        ><i class="material-icons">keyboard_arrow_right</i></span
+    <div class="breadcrumbs-left">
+      <component
+        :is="element"
+        :to="base || ''"
+        :aria-label="t('files.home')"
+        :title="t('files.home')"
       >
-      <component :is="element" :to="link.url">{{ link.name }}</component>
-    </span>
+        <i class="material-icons">home</i>
+      </component>
+
+      <span v-for="(link, index) in items" :key="index">
+        <span class="chevron"
+          ><i class="material-icons">keyboard_arrow_right</i></span
+        >
+        <component :is="element" :to="link.url">{{ link.name }}</component>
+      </span>
+    </div>
+    <div v-if="$slots.actions" class="breadcrumbs-actions">
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
@@ -80,4 +85,29 @@ const element = computed(() => {
 });
 </script>
 
-<style></style>
+<style>
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.breadcrumbs-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.breadcrumbs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25em;
+  flex-shrink: 0;
+  padding-right: 0.5em;
+}
+
+.breadcrumbs-actions .action span:not(.counter) {
+  display: none;
+}
+</style>

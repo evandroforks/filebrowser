@@ -5,6 +5,10 @@ body {
   color: var(--textSecondary);
 }
 
+body.songbook-mode {
+  padding-top: 0;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -104,6 +108,10 @@ main.songbook-mode {
   position: sticky;
   z-index: 1000;
   top: 4em;
+}
+
+body.songbook-mode .breadcrumbs {
+  top: 0;
 }
 
 .breadcrumbs span,

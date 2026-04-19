@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :class="{ 'songbook-mode': layoutStore.songbookMode }">
     <div v-if="uploadStore.totalBytes" class="progress">
       <div
         v-bind:style="{
@@ -31,13 +31,17 @@ import Prompts from "@/components/prompts/Prompts.vue";
 import Shell from "@/components/Shell.vue";
 import UploadFiles from "@/components/prompts/UploadFiles.vue";
 import { enableExec } from "@/utils/constants";
-import { computed, watch } from "vue";
+import { computed, watch, watchEffect } from "vue";
 import { useRoute } from "vue-router";
 
 const layoutStore = useLayoutStore();
 const authStore = useAuthStore();
 const fileStore = useFileStore();
 const uploadStore = useUploadStore();
+
+watchEffect(() => {
+  document.body.classList.toggle("songbook-mode", layoutStore.songbookMode);
+});
 const route = useRoute();
 
 const sentPercent = computed(() =>

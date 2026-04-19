@@ -1,17 +1,5 @@
 <template>
   <div class="songbook-wrapper">
-    <header-bar showMenu showLogo>
-      <title />
-      <template #actions>
-        <action
-          icon="arrow_back"
-          :label="t('buttons.back') || 'Back'"
-          @action="exitSongbook"
-        />
-        <action icon="print" label="Print" @action="printSongbook" />
-      </template>
-    </header-bar>
-
     <div v-if="loading" class="message delayed">
       <div class="spinner">
         <div class="bounce1"></div>
@@ -41,8 +29,6 @@ import { useFileStore } from "@/stores/file";
 import { useI18n } from "vue-i18n";
 import { baseURL } from "@/utils/constants";
 import { useAuthStore } from "@/stores/auth";
-import HeaderBar from "@/components/header/HeaderBar.vue";
-import Action from "@/components/header/Action.vue";
 
 const { t } = useI18n({});
 const fileStore = useFileStore();
@@ -58,14 +44,6 @@ const songs = ref<Song[]>([]);
 const loading = ref(true);
 
 const emit = defineEmits(["exit"]);
-
-function exitSongbook() {
-  emit("exit");
-}
-
-function printSongbook() {
-  window.print();
-}
 
 function removePrefix(url: string) {
   url = url.replace(/\/files\//, "/");

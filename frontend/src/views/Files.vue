@@ -6,7 +6,20 @@
       showLogo
     />
 
-    <breadcrumbs base="/files" />
+    <breadcrumbs base="/files">
+      <template v-if="layoutStore.songbookMode" #actions>
+        <action
+          icon="arrow_back"
+          label="Back"
+          @action="layoutStore.songbookMode = false"
+        />
+        <action
+          icon="print"
+          label="Print"
+          @action="printSongbook"
+        />
+      </template>
+    </breadcrumbs>
     <errors v-if="error" :errorCode="error.status" />
     <songbook-view
       v-else-if="layoutStore.songbookMode && fileStore.req?.isDir"
@@ -46,6 +59,7 @@ import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
 import HeaderBar from "@/components/header/HeaderBar.vue";
+import Action from "@/components/header/Action.vue";
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
 import Errors from "@/views/Errors.vue";
 import { useI18n } from "vue-i18n";
@@ -62,6 +76,8 @@ const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
 
 const layoutStore = useLayoutStore();
 const fileStore = useFileStore();
+
+const printSongbook = () => window.print();
 
 const { reload } = storeToRefs(fileStore);
 
