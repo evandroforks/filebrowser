@@ -152,8 +152,16 @@ async function measureAndBuild() {
   for (const song of songs.value) {
     const lines = parsedLines(song.content);
     const chunks: ParsedLine[][] = [];
-    for (let i = 0; i < lines.length; i += linesPerPage) {
-      chunks.push(lines.slice(i, i + linesPerPage));
+    let i = 0;
+    while (i < lines.length) {
+      let end = Math.min(i + linesPerPage, lines.length);
+      // If the chunk ends on a chord line, walk back until it doesn't
+      // (so the chord isn't left orphaned at the bottom without its lyric)
+      while (end > i + 1 && lines[end - 1].isChord) {
+        end--;
+      }
+      chunks.push(lines.slice(i, end));
+      i = end;
     }
     if (chunks.length === 0) chunks.push([]);
     chunks.forEach((chunk, idx) => {
@@ -239,11 +247,13 @@ function removePrefix(url: string) {
   return url;
 }
 
-async function fetchRawContent(itemUrl: string): Promise<string> {
+async function fetchRawContent(itemUrl: string, modified?: string): Promise<string> {
   const cleanPath = removePrefix(itemUrl);
-  const url = `${baseURL}/api/raw${cleanPath}`;
+  const cacheBuster = modified ? Date.parse(modified) : Date.now();
+  const url = `${baseURL}/api/raw${cleanPath}?_=${cacheBuster}`;
   const res = await fetch(url, {
     headers: { "X-Auth": authStore.jwt },
+    cache: "no-store",
   });
   if (!res.ok) return `[Error loading file: ${res.status}]`;
   return await res.text();
@@ -258,7 +268,7 @@ onMounted(async () => {
 
   const results: Song[] = [];
   for (const file of txtFiles) {
-    const content = await fetchRawContent(file.url);
+    const content = await fetchRawContent(file.url, file.modified);
     results.push({
       name: file.name,
       title: file.name.replace(/\.txt$/i, ""),
