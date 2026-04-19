@@ -13,6 +13,28 @@
           label="Back"
           @action="layoutStore.songbookMode = false"
         />
+        <action
+          v-if="layoutStore.songbookPaginated"
+          icon="chevron_left"
+          label="Previous song"
+          @action="layoutStore.songbookPage = Math.max(0, layoutStore.songbookPage - 1)"
+        />
+        <action
+          v-if="layoutStore.songbookPaginated"
+          icon="chevron_right"
+          label="Next song"
+          @action="layoutStore.songbookPage++"
+        />
+        <action
+          :icon="layoutStore.songbookPaginated ? 'view_agenda' : 'article'"
+          :label="layoutStore.songbookPaginated ? 'Continuous view' : 'Paginated view'"
+          @action="layoutStore.songbookPaginated = !layoutStore.songbookPaginated; layoutStore.songbookPage = 0"
+        />
+        <action
+          icon="print"
+          label="Print"
+          @action="printSongbook"
+        />
       </template>
     </breadcrumbs>
     <errors v-if="error" :errorCode="error.status" />

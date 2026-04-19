@@ -9,6 +9,24 @@
       <span>{{ t("files.loading") }}</span>
     </div>
 
+    <!-- Paginated mode: one song at a time -->
+    <div v-else-if="layoutStore.songbookPaginated" class="songbook-container">
+      <div v-if="currentSong" class="songbook-page">
+        <h2 class="song-title">
+          {{ currentSong.title }}
+          <span class="song-counter">{{ layoutStore.songbookPage + 1 }} / {{ songs.length }}</span>
+        </h2>
+        <div class="cifra-content">
+          <div
+            v-for="(line, lineIndex) in parsedLines(currentSong.content)"
+            :key="lineIndex"
+            :class="line.isChord ? 'chord-line' : 'lyric-line'"
+          >{{ line.text || '\u00A0' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Continuous mode: all songs -->
     <div v-else class="songbook-container">
       <div
         v-for="(song, index) in songs"
@@ -30,14 +48,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useFileStore } from "@/stores/file";
+import { useLayoutStore } from "@/stores/layout";
 import { useI18n } from "vue-i18n";
 import { baseURL } from "@/utils/constants";
 import { useAuthStore } from "@/stores/auth";
 
 const { t } = useI18n({});
 const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
 const authStore = useAuthStore();
 
 interface Song {
@@ -48,6 +68,16 @@ interface Song {
 
 const songs = ref<Song[]>([]);
 const loading = ref(true);
+
+const currentSong = computed(() => {
+  const page = Math.min(layoutStore.songbookPage, songs.value.length - 1);
+  return songs.value[page] ?? null;
+});
+
+// Clamp page index when songs load
+watch(songs, () => {
+  layoutStore.songbookPage = 0;
+});
 
 const emit = defineEmits(["exit"]);
 
@@ -141,6 +171,15 @@ onMounted(async () => {
   border-bottom: 2px solid #555;
   padding-bottom: 0.3em;
   color: #fff;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.song-counter {
+  font-size: 0.5em;
+  font-weight: normal;
+  color: #888;
 }
 
 .songbook-wrapper {
