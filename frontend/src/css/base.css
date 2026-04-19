@@ -9,6 +9,22 @@ body.songbook-mode {
   padding-top: 0;
 }
 
+body.songbook-paginated,
+body.songbook-paginated #app,
+body.songbook-paginated main {
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+body.songbook-paginated main > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 * {
   box-sizing: border-box;
 }

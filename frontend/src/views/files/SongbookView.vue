@@ -1,5 +1,14 @@
 <template>
   <div class="songbook-wrapper">
+    <!-- Probe: renders all lines of first song invisible to measure exact line height -->
+    <div class="cifra-content cifra-probe" ref="probeRef" aria-hidden="true">
+      <div
+        v-for="(line, i) in probeLines"
+        :key="i"
+        :class="line.isChord ? 'chord-line' : 'lyric-line'"
+      >{{ line.text || '\u00A0' }}</div>
+    </div>
+
     <div v-if="loading" class="message delayed">
       <div class="spinner">
         <div class="bounce1"></div>
@@ -9,16 +18,21 @@
       <span>{{ t("files.loading") }}</span>
     </div>
 
-    <!-- Paginated mode: one song at a time -->
-    <div v-else-if="layoutStore.songbookPaginated" class="songbook-container">
-      <div v-if="currentSong" class="songbook-page">
-        <h2 class="song-title">
-          {{ currentSong.title }}
-          <span class="song-counter">{{ layoutStore.songbookPage + 1 }} / {{ songs.length }}</span>
+    <!-- Paginated mode: one sub-page at a time, no scrollbar -->
+    <div v-else-if="layoutStore.songbookPaginated" class="songbook-page-full" ref="pageRef">
+      <div v-if="currentSubPage" class="songbook-page-full-inner">
+        <h2 class="song-title" ref="titleRef">
+          {{ currentSubPage.title }}
+          <span class="song-counter">
+            {{ layoutStore.songbookPage + 1 }} / {{ subPages.length }}
+            <template v-if="currentSubPage.totalSubPages > 1">
+              &nbsp;({{ currentSubPage.subPageNum }}/{{ currentSubPage.totalSubPages }})
+            </template>
+          </span>
         </h2>
-        <div class="cifra-content">
+        <div class="cifra-content" ref="contentRef">
           <div
-            v-for="(line, lineIndex) in parsedLines(currentSong.content)"
+            v-for="(line, lineIndex) in currentSubPage.lines"
             :key="lineIndex"
             :class="line.isChord ? 'chord-line' : 'lyric-line'"
           >{{ line.text || '\u00A0' }}</div>
@@ -26,7 +40,7 @@
       </div>
     </div>
 
-    <!-- Continuous mode: all songs -->
+    <!-- Continuous mode: all songs scrollable -->
     <div v-else class="songbook-container">
       <div
         v-for="(song, index) in songs"
@@ -48,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useI18n } from "vue-i18n";
@@ -66,17 +80,136 @@ interface Song {
   content: string;
 }
 
+interface ParsedLine {
+  text: string;
+  isChord: boolean;
+}
+
+interface SubPage {
+  title: string;
+  lines: ParsedLine[];
+  subPageNum: number;
+  totalSubPages: number;
+}
+
 const songs = ref<Song[]>([]);
 const loading = ref(true);
+const probeRef = ref<HTMLElement | null>(null);
+const pageRef = ref<HTMLElement | null>(null);
+const titleRef = ref<HTMLElement | null>(null);
+const contentRef = ref<HTMLElement | null>(null);
+const subPages = ref<SubPage[]>([]);
+const probeLines = ref<ParsedLine[]>([]);
 
-const currentSong = computed(() => {
-  const page = Math.min(layoutStore.songbookPage, songs.value.length - 1);
-  return songs.value[page] ?? null;
+let resizeObserver: ResizeObserver | null = null;
+let measuredLinesPerPage = 0;
+
+/**
+ * Two-pass measurement:
+ * Pass 1 — fill probeLines with all lines of the first song, wait for render,
+ *           then measure: probeRef.scrollHeight / lineCount = exact line height.
+ * Pass 2 — subtract title + padding from pageRef.clientHeight to get availableH,
+ *           divide by line height → linesPerPage.
+ */
+async function measureAndBuild() {
+  if (!songs.value.length || !pageRef.value) return;
+
+  const containerH = pageRef.value.clientHeight;
+  if (containerH < 50) return;
+
+  // Fill probe with all lines of first song
+  const allFirstLines = parsedLines(songs.value[0].content);
+  probeLines.value = allFirstLines;
+  await nextTick();
+
+  // Measure exact line height from probe
+  let lineH = 22;
+  if (probeRef.value && allFirstLines.length > 0) {
+    lineH = probeRef.value.scrollHeight / allFirstLines.length;
+  }
+
+  // Measure title height (use titleRef if available, else estimate)
+  const titleH = titleRef.value
+    ? titleRef.value.offsetHeight + parseFloat(getComputedStyle(titleRef.value).marginBottom || "8")
+    : 68;
+
+  // Measure content padding/border overhead
+  let paddingH = 34;
+  if (contentRef.value) {
+    const cs = window.getComputedStyle(contentRef.value);
+    paddingH = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+             + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  }
+
+  const availableH = containerH - titleH - paddingH;
+  const linesPerPage = Math.max(3, Math.floor(availableH / lineH));
+
+  if (measuredLinesPerPage === linesPerPage) return; // nothing changed
+  measuredLinesPerPage = linesPerPage;
+
+  // Build all sub-pages
+  const result: SubPage[] = [];
+  for (const song of songs.value) {
+    const lines = parsedLines(song.content);
+    const chunks: ParsedLine[][] = [];
+    for (let i = 0; i < lines.length; i += linesPerPage) {
+      chunks.push(lines.slice(i, i + linesPerPage));
+    }
+    if (chunks.length === 0) chunks.push([]);
+    chunks.forEach((chunk, idx) => {
+      result.push({
+        title: song.title,
+        lines: chunk,
+        subPageNum: idx + 1,
+        totalSubPages: chunks.length,
+      });
+    });
+  }
+  subPages.value = result;
+  probeLines.value = []; // clear probe
+}
+
+function attachResizeObserver() {
+  if (!pageRef.value) return;
+  resizeObserver?.disconnect();
+  resizeObserver = new ResizeObserver(() => {
+    measuredLinesPerPage = 0; // force re-measure on resize
+    measureAndBuild();
+  });
+  resizeObserver.observe(pageRef.value);
+}
+
+const currentSubPage = computed(() => {
+  const page = Math.min(layoutStore.songbookPage, subPages.value.length - 1);
+  return subPages.value[page] ?? null;
 });
 
-// Clamp page index when songs load
-watch(songs, () => {
+watch(songs, async () => {
   layoutStore.songbookPage = 0;
+  measuredLinesPerPage = 0;
+  if (layoutStore.songbookPaginated) {
+    await nextTick();
+    attachResizeObserver();
+    await measureAndBuild();
+  }
+});
+
+watch(() => layoutStore.songbookPaginated, async (val) => {
+  if (val) {
+    layoutStore.songbookPage = 0;
+    measuredLinesPerPage = 0;
+    await nextTick();
+    attachResizeObserver();
+    await measureAndBuild();
+  } else {
+    resizeObserver?.disconnect();
+    probeLines.value = [];
+  }
+});
+
+onMounted(() => {});
+onUnmounted(() => {
+  resizeObserver?.disconnect();
 });
 
 const emit = defineEmits(["exit"]);
@@ -84,20 +217,16 @@ const emit = defineEmits(["exit"]);
 const CHORD_TOKEN = /^[A-G][b#]?(m|M|maj|min|dim|aug|sus|add)?\d*([\/\(][A-G][b#]?)?$/;
 
 function isChordLine(line: string): boolean {
-  // Match lines that are section markers like [Intro] or chord-only lines
   const trimmed = line.trim();
   if (!trimmed) return false;
-  // Section markers like [Intro], [Verse 1], etc.
   if (/^\[.*\]/.test(trimmed)) return true;
-  // Split by whitespace; every non-empty token must look like a chord
   const tokens = trimmed.split(/\s+/).filter(Boolean);
-  // Allow section labels followed by chords: e.g. "Intro: C7 Fm7"
   const withoutLabel = tokens[0].endsWith(":") ? tokens.slice(1) : tokens;
   if (withoutLabel.length === 0) return false;
-  return withoutLabel.every((t) => CHORD_TOKEN.test(t));
+  return withoutLabel.every((tok) => CHORD_TOKEN.test(tok));
 }
 
-function parsedLines(content: string) {
+function parsedLines(content: string): ParsedLine[] {
   return content.split(/\r?\n/).map((text) => ({
     text,
     isChord: isChordLine(text),
@@ -114,24 +243,17 @@ async function fetchRawContent(itemUrl: string): Promise<string> {
   const cleanPath = removePrefix(itemUrl);
   const url = `${baseURL}/api/raw${cleanPath}`;
   const res = await fetch(url, {
-    headers: {
-      "X-Auth": authStore.jwt,
-    },
+    headers: { "X-Auth": authStore.jwt },
   });
-  if (!res.ok) {
-    return `[Error loading file: ${res.status}]`;
-  }
+  if (!res.ok) return `[Error loading file: ${res.status}]`;
   return await res.text();
 }
 
 onMounted(async () => {
   const items = fileStore.req?.items ?? [];
   const txtFiles = items.filter(
-    (item: any) =>
-      !item.isDir && item.name.toLowerCase().endsWith(".txt")
+    (item: any) => !item.isDir && item.name.toLowerCase().endsWith(".txt")
   );
-
-  // Sort alphabetically
   txtFiles.sort((a: any, b: any) => a.name.localeCompare(b.name));
 
   const results: Song[] = [];
@@ -143,13 +265,69 @@ onMounted(async () => {
       content,
     });
   }
-
   songs.value = results;
   loading.value = false;
 });
 </script>
 
 <style scoped>
+/* Hidden probe: renders lines invisibly to measure exact line height */
+.cifra-probe {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  width: 600px;
+  max-height: none !important;
+  overflow: visible !important;
+  height: auto !important;
+  flex: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.songbook-wrapper {
+  background: #000;
+  min-height: 100%;
+  padding: 1em 0;
+  position: relative;
+}
+
+body.songbook-paginated .songbook-wrapper {
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Paginated: fills exact remaining height, no scroll */
+.songbook-page-full {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 1.5em;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.songbook-page-full-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.songbook-page-full .cifra-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Continuous mode */
 .songbook-container {
   max-width: 900px;
   margin: 0 auto;
@@ -174,18 +352,13 @@ onMounted(async () => {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .song-counter {
   font-size: 0.5em;
   font-weight: normal;
   color: #888;
-}
-
-.songbook-wrapper {
-  background: #000;
-  min-height: 100%;
-  padding: 1em 0;
 }
 
 .cifra-content {
@@ -231,7 +404,6 @@ onMounted(async () => {
     margin-bottom: 0;
   }
 
-  /* Hide navigation elements when printing */
   header,
   nav,
   #sidebar,

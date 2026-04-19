@@ -41,6 +41,7 @@ const uploadStore = useUploadStore();
 
 watchEffect(() => {
   document.body.classList.toggle("songbook-mode", layoutStore.songbookMode);
+  document.body.classList.toggle("songbook-paginated", layoutStore.songbookMode && layoutStore.songbookPaginated);
 });
 const route = useRoute();
 
