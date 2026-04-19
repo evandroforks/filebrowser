@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: dev.Dockerfile
     container_name: filebrowser-dev
+    restart: unless-stopped
     volumes:
       - .:/app
       - go-mod-cache:/root/go/pkg/mod
