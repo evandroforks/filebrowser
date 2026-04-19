@@ -112,6 +112,24 @@ main.songbook-mode {
 
 body.songbook-mode .breadcrumbs {
   top: 0;
+  background: #000;
+  border-bottom: 1px solid #333;
+  color: #00cc44;
+}
+
+body.songbook-mode .breadcrumbs span,
+body.songbook-mode .breadcrumbs a,
+body.songbook-mode .breadcrumbs i {
+  color: #00cc44;
+}
+
+body.songbook-mode .breadcrumbs .action,
+body.songbook-mode .breadcrumbs .action span {
+  color: #00cc44;
+}
+
+body.songbook-mode .breadcrumbs .action:hover {
+  background: rgba(0, 204, 68, 0.15);
 }
 
 .breadcrumbs span,

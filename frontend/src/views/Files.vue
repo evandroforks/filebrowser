@@ -13,11 +13,6 @@
           label="Back"
           @action="layoutStore.songbookMode = false"
         />
-        <action
-          icon="print"
-          label="Print"
-          @action="printSongbook"
-        />
       </template>
     </breadcrumbs>
     <errors v-if="error" :errorCode="error.status" />
