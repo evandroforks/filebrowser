@@ -8,7 +8,15 @@
 
     <breadcrumbs base="/files" />
     <errors v-if="error" :errorCode="error.status" />
-    <component v-else-if="currentView" :is="currentView"></component>
+    <songbook-view
+      v-else-if="songbookMode && fileStore.req?.isDir"
+      @exit="songbookMode = false"
+    />
+    <component
+      v-else-if="currentView"
+      :is="currentView"
+      @songbook="songbookMode = true"
+    ></component>
     <div v-else>
       <h2 class="message delayed">
         <div class="spinner">
@@ -43,8 +51,11 @@ import Errors from "@/views/Errors.vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import FileListing from "@/views/files/FileListing.vue";
+import SongbookView from "@/views/files/SongbookView.vue";
 import { StatusError } from "@/api/utils";
 import { name } from "../utils/constants";
+
+const songbookMode = ref(false);
 
 const Editor = defineAsyncComponent(() => import("@/views/files/Editor.vue"));
 const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
@@ -106,6 +117,7 @@ onUnmounted(() => {
 });
 
 watch(route, () => {
+  songbookMode.value = false;
   fetchData();
 });
 watch(reload, (newValue) => {

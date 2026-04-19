@@ -59,6 +59,12 @@
           @action="switchView"
         />
         <action
+          v-if="hasTxtFiles"
+          icon="library_music"
+          label="Songbook View"
+          @action="$emit('songbook')"
+        />
+        <action
           v-if="headerButtons.download"
           icon="file_download"
           :label="t('buttons.download')"
@@ -394,6 +400,14 @@ onBeforeRouteUpdate(() => {
 });
 
 const { t } = useI18n();
+
+defineEmits(["songbook"]);
+
+const hasTxtFiles = computed(() => {
+  return (fileStore.req?.items ?? []).some(
+    (item: any) => !item.isDir && item.name.toLowerCase().endsWith(".txt")
+  );
+});
 
 const listing = ref<HTMLElement | null>(null);
 
