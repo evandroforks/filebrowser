@@ -21,15 +21,6 @@
     <!-- Paginated mode: one sub-page at a time, no scrollbar -->
     <div v-else-if="layoutStore.songbookPaginated" class="songbook-page-full" ref="pageRef">
       <div v-if="currentSubPage" class="songbook-page-full-inner">
-        <h2 class="song-title" ref="titleRef">
-          {{ currentSubPage.title }}
-          <span class="song-counter">
-            {{ layoutStore.songbookPage + 1 }} / {{ subPages.length }}
-            <template v-if="currentSubPage.totalSubPages > 1">
-              &nbsp;({{ currentSubPage.subPageNum }}/{{ currentSubPage.totalSubPages }})
-            </template>
-          </span>
-        </h2>
         <div class="cifra-content" ref="contentRef">
           <div
             v-for="(line, lineIndex) in currentSubPage.lines"
@@ -128,20 +119,12 @@ async function measureAndBuild() {
     lineH = probeRef.value.scrollHeight / allFirstLines.length;
   }
 
-  // Measure title height (use titleRef if available, else estimate)
-  const titleH = titleRef.value
-    ? titleRef.value.offsetHeight + parseFloat(getComputedStyle(titleRef.value).marginBottom || "8")
-    : 68;
+  // cifra-content has flex:1 and fills all available space — measure it directly.
+  // Fall back to containerH if contentRef isn't mounted yet.
+  const availableH = (contentRef.value?.clientHeight ?? 0) > 50
+    ? contentRef.value!.clientHeight
+    : containerH;
 
-  // Measure content padding/border overhead
-  let paddingH = 34;
-  if (contentRef.value) {
-    const cs = window.getComputedStyle(contentRef.value);
-    paddingH = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
-             + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-  }
-
-  const availableH = containerH - titleH - paddingH;
   const linesPerPage = Math.max(3, Math.floor(availableH / lineH));
 
   if (measuredLinesPerPage === linesPerPage) return; // nothing changed
@@ -174,6 +157,7 @@ async function measureAndBuild() {
     });
   }
   subPages.value = result;
+  layoutStore.songbookTotalPages = result.length;
   probeLines.value = []; // clear probe
 }
 
@@ -191,6 +175,17 @@ const currentSubPage = computed(() => {
   const page = Math.min(layoutStore.songbookPage, subPages.value.length - 1);
   return subPages.value[page] ?? null;
 });
+
+watch(currentSubPage, (page) => {
+  if (!page) {
+    layoutStore.songbookCurrentTitle = "";
+    return;
+  }
+  let title = page.title;
+  const pageLabel = `${layoutStore.songbookPage + 1} / ${subPages.value.length}`;
+  const subLabel = page.totalSubPages > 1 ? ` (${page.subPageNum}/${page.totalSubPages})` : "";
+  layoutStore.songbookCurrentTitle = `${title} — ${pageLabel}${subLabel}`;
+}, { immediate: true });
 
 watch(songs, async () => {
   layoutStore.songbookPage = 0;
@@ -218,6 +213,8 @@ watch(() => layoutStore.songbookPaginated, async (val) => {
 onMounted(() => {});
 onUnmounted(() => {
   resizeObserver?.disconnect();
+  layoutStore.songbookCurrentTitle = "";
+  layoutStore.songbookTotalPages = 0;
 });
 
 const emit = defineEmits(["exit"]);

@@ -17,6 +17,9 @@
         <component :is="element" :to="link.url">{{ link.name }}</component>
       </span>
     </div>
+    <div v-if="$slots.title" class="breadcrumbs-title">
+      <slot name="title" />
+    </div>
     <div v-if="$slots.actions" class="breadcrumbs-actions">
       <slot name="actions" />
     </div>
@@ -90,6 +93,7 @@ const element = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
 }
 
 .breadcrumbs-left {
@@ -97,6 +101,21 @@ const element = computed(() => {
   align-items: center;
   flex: 1;
   min-width: 0;
+}
+
+.breadcrumbs-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  font-size: 1em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+  pointer-events: none;
 }
 
 .breadcrumbs-actions {

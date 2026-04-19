@@ -148,6 +148,13 @@ body.songbook-mode .breadcrumbs .action:hover {
   background: rgba(0, 204, 68, 0.15);
 }
 
+body.songbook-mode .breadcrumbs .breadcrumbs-title,
+body.songbook-mode .songbook-breadcrumb-title {
+  color: #00cc44;
+  font-size: 1em;
+  font-weight: 600;
+}
+
 .breadcrumbs span,
 .breadcrumbs {
   display: flex;

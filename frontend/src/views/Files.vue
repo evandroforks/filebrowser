@@ -7,6 +7,9 @@
     />
 
     <breadcrumbs base="/files">
+      <template v-if="layoutStore.songbookMode && layoutStore.songbookPaginated" #title>
+        <span class="songbook-breadcrumb-title">{{ layoutStore.songbookCurrentTitle }}</span>
+      </template>
       <template v-if="layoutStore.songbookMode" #actions>
         <action
           icon="arrow_back"
@@ -23,7 +26,7 @@
           v-if="layoutStore.songbookPaginated"
           icon="chevron_right"
           label="Next song"
-          @action="layoutStore.songbookPage++"
+          @action="layoutStore.songbookPage = Math.min(layoutStore.songbookTotalPages - 1, layoutStore.songbookPage + 1)"
         />
         <action
           :icon="layoutStore.songbookPaginated ? 'view_agenda' : 'article'"
