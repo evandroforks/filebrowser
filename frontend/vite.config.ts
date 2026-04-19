@@ -31,6 +31,9 @@ export default defineConfig(({ command }) => {
       plugins,
       resolve,
       server: {
+        allowedHosts: process.env.VITE_ALLOWED_HOSTS
+          ? process.env.VITE_ALLOWED_HOSTS.split(",")
+          : ["localhost"],
         proxy: {
           "/api/command": {
             target: "ws://127.0.0.1:8080",
