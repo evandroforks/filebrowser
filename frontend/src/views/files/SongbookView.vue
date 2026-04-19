@@ -16,7 +16,13 @@
         class="songbook-page"
       >
         <h2 class="song-title">{{ song.title }}</h2>
-        <pre class="cifra-content">{{ song.content }}</pre>
+        <div class="cifra-content">
+          <div
+            v-for="(line, lineIndex) in parsedLines(song.content)"
+            :key="lineIndex"
+            :class="line.isChord ? 'chord-line' : 'lyric-line'"
+          >{{ line.text || '\u00A0' }}</div>
+        </div>
         <hr v-if="index < songs.length - 1" class="page-break" />
       </div>
     </div>
@@ -44,6 +50,29 @@ const songs = ref<Song[]>([]);
 const loading = ref(true);
 
 const emit = defineEmits(["exit"]);
+
+const CHORD_TOKEN = /^[A-G][b#]?(m|M|maj|min|dim|aug|sus|add)?\d*([\/\(][A-G][b#]?)?$/;
+
+function isChordLine(line: string): boolean {
+  // Match lines that are section markers like [Intro] or chord-only lines
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  // Section markers like [Intro], [Verse 1], etc.
+  if (/^\[.*\]/.test(trimmed)) return true;
+  // Split by whitespace; every non-empty token must look like a chord
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  // Allow section labels followed by chords: e.g. "Intro: C7 Fm7"
+  const withoutLabel = tokens[0].endsWith(":") ? tokens.slice(1) : tokens;
+  if (withoutLabel.length === 0) return false;
+  return withoutLabel.every((t) => CHORD_TOKEN.test(t));
+}
+
+function parsedLines(content: string) {
+  return content.split(/\r?\n/).map((text) => ({
+    text,
+    isChord: isChordLine(text),
+  }));
+}
 
 function removePrefix(url: string) {
   url = url.replace(/\/files\//, "/");
@@ -109,8 +138,15 @@ onMounted(async () => {
   font-size: 1.6em;
   font-weight: bold;
   margin-bottom: 0.5em;
-  border-bottom: 2px solid #ccc;
+  border-bottom: 2px solid #555;
   padding-bottom: 0.3em;
+  color: #fff;
+}
+
+.songbook-wrapper {
+  background: #000;
+  min-height: 100%;
+  padding: 1em 0;
 }
 
 .cifra-content {
@@ -118,16 +154,25 @@ onMounted(async () => {
   font-family: "Courier New", Courier, monospace;
   font-size: 0.95em;
   line-height: 1.5;
-  background: #fafafa;
+  background: #000;
   padding: 1em;
   border-radius: 6px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #333;
   overflow-x: auto;
+}
+
+.chord-line {
+  color: #ff8c00;
+  font-weight: bold;
+}
+
+.lyric-line {
+  color: #ffffff;
 }
 
 .page-break {
   border: none;
-  border-top: 1px dashed #ccc;
+  border-top: 1px dashed #444;
   margin: 2em 0;
 }
 
