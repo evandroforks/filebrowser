@@ -125,7 +125,8 @@ async function measureAndBuild() {
     ? contentRef.value!.clientHeight
     : containerH;
 
-  const linesPerPage = Math.max(3, Math.floor(availableH / lineH));
+  // Subtract 1 line as safety margin so the last line is never half-clipped
+  const linesPerPage = Math.max(3, Math.floor(availableH / lineH) - 1);
 
   if (measuredLinesPerPage === linesPerPage) return; // nothing changed
   measuredLinesPerPage = linesPerPage;
@@ -135,14 +136,56 @@ async function measureAndBuild() {
   for (const song of songs.value) {
     const lines = parsedLines(song.content);
     const chunks: ParsedLine[][] = [];
+    // Returns the index of the chord line that starts the block containing
+    // lines[pos], or pos itself if no chord is found above.
+    // A "block" is a chord line followed by consecutive non-empty lyric lines.
+    const findBlockStart = (pos: number, chunkStart: number): number => {
+      let p = pos;
+      while (p > chunkStart && !lines[p].isChord && lines[p].text.trim()) {
+        p--;
+      }
+      return lines[p].isChord ? p : pos;
+    };
+
     let i = 0;
     while (i < lines.length) {
       let end = Math.min(i + linesPerPage, lines.length);
-      // If the chunk ends on a chord line, walk back until it doesn't
-      // (so the chord isn't left orphaned at the bottom without its lyric)
-      while (end > i + 1 && lines[end - 1].isChord) {
-        end--;
+
+      // 1. Strip trailing empty lines
+      let trimmed = end;
+      while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
+        trimmed--;
       }
+
+      // 2. Strip trailing chord lines (and repeat empty strip)
+      while (trimmed > i + 1 && lines[trimmed - 1].isChord) {
+        trimmed--;
+        while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
+          trimmed--;
+        }
+      }
+
+      // 3. If the very next line (that didn't fit) is a non-empty lyric that
+      //    belongs to the same chord-block as the last line on this page,
+      //    move the cut back to the chord that started that block — keeping
+      //    chord + ALL its lyrics together on the next page.
+      if (
+        trimmed < lines.length &&
+        lines[trimmed].text.trim() &&
+        !lines[trimmed].isChord
+      ) {
+        const blockStart = findBlockStart(trimmed - 1, i);
+        if (blockStart > i) {
+          // Only move back if we'd still have content on this page
+          trimmed = blockStart;
+          // Re-strip any empties that are now at the tail
+          while (trimmed > i + 1 && !lines[trimmed - 1].text.trim()) {
+            trimmed--;
+          }
+        }
+      }
+
+      end = trimmed;
       chunks.push(lines.slice(i, end));
       i = end;
     }
