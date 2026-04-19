@@ -1,5 +1,5 @@
 <template>
-  <div class="songbook-wrapper">
+  <div class="songbook-wrapper" @click="handleWrapperClick">
     <!-- Probe: renders all lines of first song invisible to measure exact line height -->
     <div class="cifra-content cifra-probe" ref="probeRef" aria-hidden="true">
       <div
@@ -324,8 +324,46 @@ watch(() => layoutStore.songbookDualPage, async () => {
   }
 });
 
-onMounted(() => {});
+function handleTapLeft() {
+  layoutStore.songbookPage = Math.max(0, layoutStore.songbookPage - 1);
+}
+
+function handleTapRight() {
+  layoutStore.songbookPage = Math.min(layoutStore.songbookTotalPages - 1, layoutStore.songbookPage + 1);
+}
+
+function handleWrapperClick(e: MouseEvent) {
+  if (!layoutStore.songbookPaginated) return;
+  // In dual-page mode the divider is the center; in single-page use window center
+  const mid = window.innerWidth / 2;
+  if (e.clientX < mid) {
+    handleTapLeft();
+  } else {
+    handleTapRight();
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!layoutStore.songbookPaginated) return;
+  // Ignore when user is typing in an input/textarea
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+  const total = layoutStore.songbookTotalPages;
+  if (e.key === " " || e.key === "ArrowRight" || e.key === "ArrowDown") {
+    e.preventDefault();
+    layoutStore.songbookPage = Math.min(total - 1, layoutStore.songbookPage + 1);
+  } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+    e.preventDefault();
+    layoutStore.songbookPage = Math.max(0, layoutStore.songbookPage - 1);
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown);
+});
 onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeydown);
   resizeObserver?.disconnect();
   layoutStore.songbookCurrentTitle = "";
   layoutStore.songbookTotalPages = 0;
@@ -434,6 +472,7 @@ body.songbook-paginated .songbook-wrapper {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .songbook-page-full-inner {
