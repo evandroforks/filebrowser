@@ -127,7 +127,6 @@ const songs = ref<Song[]>([]);
 const loading = ref(true);
 const probeRef = ref<HTMLElement | null>(null);
 const pageRef = ref<HTMLElement | null>(null);
-const titleRef = ref<HTMLElement | null>(null);
 const contentRef = ref<HTMLElement | null>(null);
 const subPages = ref<SubPage[]>([]);
 const probeLines = ref<ParsedLine[]>([]);
@@ -385,8 +384,6 @@ onUnmounted(() => {
   layoutStore.songbookCurrentTitle = "";
   layoutStore.songbookTotalPages = 0;
 });
-
-const emit = defineEmits(["exit"]);
 
 const CHORD_TOKEN = /^[A-G][b#]?(m|M|maj|min|dim|aug|sus|add)?\d*([\/\(][A-G][b#]?)?$/;
 
@@ -706,12 +703,6 @@ body.songbook-paginated .songbook-wrapper {
   align-items: baseline;
   justify-content: space-between;
   flex-shrink: 0;
-}
-
-.song-counter {
-  font-size: 0.5em;
-  font-weight: normal;
-  color: #888;
 }
 
 .cifra-content {
