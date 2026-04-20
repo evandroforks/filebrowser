@@ -1,5 +1,12 @@
 <template>
   <div class="songbook-wrapper" @click="handleWrapperClick">
+    <!-- Transpose controls -->
+    <div class="transpose-controls" @click.stop>
+      <button class="transpose-btn" @click="changeTranspose(-1)" title="Tom -1">−</button>
+      <span class="transpose-label">Tom: {{ currentSongTranspose >= 0 ? '+' : '' }}{{ currentSongTranspose }}</span>
+      <button class="transpose-btn" @click="changeTranspose(1)" title="Tom +1">+</button>
+      <button v-if="currentSongTranspose !== 0" class="transpose-btn transpose-reset" @click="resetTranspose()" title="Reset">↺</button>
+    </div>
     <!-- Probe: renders all lines of first song invisible to measure exact line height -->
     <div class="cifra-content cifra-probe" ref="probeRef" aria-hidden="true">
       <div
@@ -26,7 +33,7 @@
             v-for="(line, lineIndex) in currentSubPage.lines"
             :key="lineIndex"
             :class="line.isChord ? 'chord-line' : 'lyric-line'"
-          >{{ line.text || '\u00A0' }}</div>
+          >{{ line.isChord ? transposeLine(line.text, getSongTranspose(currentSubPage!.title)) : (line.text || '\u00A0') }}</div>
         </div>
       </div>
     </div>
@@ -40,7 +47,7 @@
               v-for="(line, lineIndex) in leftSubPage.lines"
               :key="lineIndex"
               :class="line.isChord ? 'chord-line' : 'lyric-line'"
-            >{{ line.text || '\u00A0' }}</div>
+            >{{ line.isChord ? transposeLine(line.text, getSongTranspose(leftSubPage!.title)) : (line.text || '\u00A0') }}</div>
           </div>
         </div>
       </div>
@@ -52,18 +59,19 @@
               v-for="(line, lineIndex) in rightSubPage.lines"
               :key="lineIndex"
               :class="line.isChord ? 'chord-line' : 'lyric-line'"
-            >{{ line.text || '\u00A0' }}</div>
+            >{{ line.isChord ? transposeLine(line.text, getSongTranspose(rightSubPage!.title)) : (line.text || '\u00A0') }}</div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Continuous mode: all songs scrollable -->
-    <div v-else class="songbook-container">
+    <div v-else class="songbook-container" ref="continuousContainerRef">
       <div
         v-for="(song, index) in songs"
         :key="song.name"
         class="songbook-page"
+        :data-song-title="song.title"
       >
         <h2 class="song-title">{{ song.title }}</h2>
         <div class="cifra-content">
@@ -71,7 +79,7 @@
             v-for="(line, lineIndex) in parsedLines(song.content)"
             :key="lineIndex"
             :class="line.isChord ? 'chord-line' : 'lyric-line'"
-          >{{ line.text || '\u00A0' }}</div>
+          >{{ line.isChord ? transposeLine(line.text, getSongTranspose(song.title)) : (line.text || '\u00A0') }}</div>
         </div>
         <hr v-if="index < songs.length - 1" class="page-break" />
       </div>
@@ -281,6 +289,7 @@ const rightSubPage = computed(() => {
 });
 
 watch(currentSubPage, (page) => {
+  if (!layoutStore.songbookPaginated) return;
   if (!page) {
     layoutStore.songbookCurrentTitle = "";
     return;
@@ -298,11 +307,16 @@ watch(songs, async () => {
     await nextTick();
     attachResizeObserver();
     await measureAndBuild();
+  } else {
+    await nextTick();
+    attachSongIntersectionObserver();
   }
 });
 
 watch(() => layoutStore.songbookPaginated, async (val) => {
   if (val) {
+    songIntersectionObserver?.disconnect();
+    songIntersectionObserver = null;
     layoutStore.songbookPage = 0;
     measuredLinesPerPage = 0;
     await nextTick();
@@ -311,6 +325,8 @@ watch(() => layoutStore.songbookPaginated, async (val) => {
   } else {
     resizeObserver?.disconnect();
     probeLines.value = [];
+    await nextTick();
+    attachSongIntersectionObserver();
   }
 });
 
@@ -365,6 +381,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeydown);
   resizeObserver?.disconnect();
+  songIntersectionObserver?.disconnect();
   layoutStore.songbookCurrentTitle = "";
   layoutStore.songbookTotalPages = 0;
 });
@@ -390,6 +407,127 @@ function parsedLines(content: string): ParsedLine[] {
   }));
 }
 
+// --- Transpose logic ---
+const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+const STORAGE_KEY = 'songbook-transpose';
+
+// Map of song title → semitones offset
+const transposeMap = ref<Record<string, number>>({});
+
+function loadTransposeMap() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    transposeMap.value = raw ? JSON.parse(raw) : {};
+  } catch {
+    transposeMap.value = {};
+  }
+}
+
+function saveTransposeMap() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(transposeMap.value));
+}
+
+const continuousContainerRef = ref<HTMLElement | null>(null);
+const scrollVisibleTitle = ref<string>('');
+let songIntersectionObserver: IntersectionObserver | null = null;
+
+// In continuous mode, update the header bar with the visible song
+watch(scrollVisibleTitle, (title) => {
+  if (layoutStore.songbookPaginated || !title) return;
+  const idx = songs.value.findIndex(s => s.title === title);
+  const total = songs.value.length;
+  const label = idx >= 0 ? `${idx + 1} / ${total}` : '';
+  layoutStore.songbookCurrentTitle = `${title} — ${label}`;
+});
+
+function attachSongIntersectionObserver() {
+  songIntersectionObserver?.disconnect();
+  songIntersectionObserver = null;
+  if (!continuousContainerRef.value) return;
+  const pages = continuousContainerRef.value.querySelectorAll<HTMLElement>('.songbook-page[data-song-title]');
+  if (!pages.length) return;
+
+  // Track ratio of each song element in view; pick highest visible
+  const ratioMap = new Map<string, number>();
+
+  songIntersectionObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const title = (entry.target as HTMLElement).dataset.songTitle ?? '';
+      ratioMap.set(title, entry.intersectionRatio);
+    }
+    // The song with the highest intersection ratio is "current"
+    let bestTitle = '';
+    let bestRatio = -1;
+    for (const [title, ratio] of ratioMap) {
+      if (ratio > bestRatio) { bestRatio = ratio; bestTitle = title; }
+    }
+    if (bestTitle) scrollVisibleTitle.value = bestTitle;
+  }, { threshold: Array.from({ length: 21 }, (_, i) => i / 20) });
+
+  for (const page of pages) {
+    ratioMap.set((page as HTMLElement).dataset.songTitle ?? '', 0);
+    songIntersectionObserver.observe(page);
+  }
+}
+
+function getSongTranspose(songTitle: string): number {
+  return transposeMap.value[songTitle] ?? 0;
+}
+
+// The current song title based on which page/mode is active
+const currentSongTitle = computed<string>(() => {
+  if (layoutStore.songbookPaginated) {
+    return currentSubPage.value?.title ?? '';
+  }
+  // Continuous mode: use the song most visible in the viewport
+  return scrollVisibleTitle.value || songs.value[0]?.title || '';
+});
+
+const currentSongTranspose = computed<number>(() => getSongTranspose(currentSongTitle.value));
+
+function changeTranspose(delta: number) {
+  const title = currentSongTitle.value;
+  if (!title) return;
+  let val = getSongTranspose(title) + delta;
+  val = ((val % 12) + 12) % 12;
+  if (val > 6) val -= 12;
+  transposeMap.value[title] = val;
+  saveTransposeMap();
+}
+
+function resetTranspose() {
+  const title = currentSongTitle.value;
+  if (!title) return;
+  delete transposeMap.value[title];
+  saveTransposeMap();
+}
+
+function transposeNote(note: string, semitones: number): string {
+  if (semitones === 0) return note;
+  const isFlat = note.includes('b');
+  const noteList = isFlat ? NOTES_FLAT : NOTES_SHARP;
+  const idx = noteList.indexOf(note);
+  if (idx === -1) {
+    // try the other list
+    const altList = isFlat ? NOTES_SHARP : NOTES_FLAT;
+    const altIdx = altList.indexOf(note);
+    if (altIdx === -1) return note;
+    return NOTES_SHARP[((altIdx + semitones) % 12 + 12) % 12];
+  }
+  return noteList[((idx + semitones) % 12 + 12) % 12];
+}
+
+function transposeLine(line: string, semitones: number): string {
+  if (semitones === 0) return line;
+  // Replace chord tokens: root note optionally followed by #/b, then modifiers
+  return line.replace(/\b([A-G][#b]?)(maj|min|dim|aug|sus|add|m|M|\d|\(|\/)*/g, (match, root: string) => {
+    const transposed = transposeNote(root, semitones);
+    return transposed + match.slice(root.length);
+  });
+}
+
 function removePrefix(url: string) {
   url = url.replace(/\/files\//, "/");
   if (url === "") url = "/";
@@ -409,6 +547,7 @@ async function fetchRawContent(itemUrl: string, modified?: string): Promise<stri
 }
 
 onMounted(async () => {
+  loadTransposeMap();
   const items = fileStore.req?.items ?? [];
   const txtFiles = items.filter(
     (item: any) => !item.isDir && item.name.toLowerCase().endsWith(".txt")
@@ -430,6 +569,60 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Transpose controls */
+.transpose-controls {
+  position: fixed;
+  bottom: 1em;
+  right: 1em;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 0.3em 0.6em;
+  backdrop-filter: blur(6px);
+}
+
+.transpose-btn {
+  background: #333;
+  color: #fff;
+  border: 1px solid #666;
+  border-radius: 4px;
+  width: 2em;
+  height: 2em;
+  font-size: 1.1em;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.transpose-btn:hover {
+  background: #555;
+}
+
+.transpose-btn:active {
+  background: #ff8c00;
+}
+
+.transpose-reset {
+  font-size: 1em;
+  width: 2em;
+}
+
+.transpose-label {
+  color: #ff8c00;
+  font-family: "Courier New", monospace;
+  font-size: 0.9em;
+  min-width: 4.5em;
+  text-align: center;
+  user-select: none;
+}
+
 /* Hidden probe: renders lines invisibly to measure exact line height */
 .cifra-probe {
   position: absolute;

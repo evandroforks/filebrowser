@@ -7,7 +7,7 @@
     />
 
     <breadcrumbs base="/files">
-      <template v-if="layoutStore.songbookMode && (layoutStore.songbookPaginated)" #title>
+      <template v-if="layoutStore.songbookMode && layoutStore.songbookCurrentTitle" #title>
         <span class="songbook-breadcrumb-title">{{ layoutStore.songbookCurrentTitle }}</span>
       </template>
       <template v-if="layoutStore.songbookMode" #actions>
