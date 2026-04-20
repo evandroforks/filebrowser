@@ -2,10 +2,9 @@
   <div class="songbook-wrapper" @click="handleWrapperClick">
     <!-- Transpose controls -->
     <div class="transpose-controls" @click.stop>
-      <button class="transpose-btn" @click="changeTranspose(-1)" title="Tom -1">−</button>
+      <button class="transpose-btn" @click="changeTranspose(-1)" title="Descer meio tom">−½</button>
       <span class="transpose-label">Tom: {{ currentSongTranspose >= 0 ? '+' : '' }}{{ currentSongTranspose }}</span>
-      <button class="transpose-btn" @click="changeTranspose(1)" title="Tom +1">+</button>
-      <button v-if="currentSongTranspose !== 0" class="transpose-btn transpose-reset" @click="resetTranspose()" title="Reset">↺</button>
+      <button class="transpose-btn" @click="changeTranspose(1)" title="Subir meio tom">+½</button>
     </div>
     <!-- Probe: renders all lines of first song invisible to measure exact line height -->
     <div class="cifra-content cifra-probe" ref="probeRef" aria-hidden="true">
@@ -518,10 +517,13 @@ function transposeNote(note: string, semitones: number): string {
 
 function transposeLine(line: string, semitones: number): string {
   if (semitones === 0) return line;
-  // Replace chord tokens: root note optionally followed by #/b, then modifiers
-  return line.replace(/\b([A-G][#b]?)(maj|min|dim|aug|sus|add|m|M|\d|\(|\/)*/g, (match, root: string) => {
+  // Split line into bracket segments [...]  and non-bracket segments.
+  // Only transpose chords outside of brackets.
+  return line.replace(/(\[[^\]]*\])|(\b[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M|\d|\(|\/)* *)/g, (match, bracket: string, chord: string) => {
+    if (bracket !== undefined) return bracket; // leave [Final], [Verse], etc. untouched
+    const root = chord.match(/^[A-G][#b]?/)![0];
     const transposed = transposeNote(root, semitones);
-    return transposed + match.slice(root.length);
+    return transposed + chord.slice(root.length);
   });
 }
 
