@@ -14,7 +14,7 @@
         <action
           icon="arrow_back"
           label="Back"
-          @action="layoutStore.songbookMode = false; layoutStore.songbookPaginated = false; layoutStore.songbookDualPage = false"
+          @action="layoutStore.songbookMode = false"
         />
         <action
           v-if="layoutStore.songbookPaginated"
@@ -33,14 +33,12 @@
           :label="!layoutStore.songbookPaginated ? 'Paginated view' : layoutStore.songbookDualPage ? 'Continuous view' : 'Dual-page view'"
           @action="(() => {
             if (!layoutStore.songbookPaginated) {
-              layoutStore.songbookPaginated = true;
-              layoutStore.songbookDualPage = false;
+              layoutStore.setSongbookViewMode(true, false);
               layoutStore.songbookPage = 0;
             } else if (!layoutStore.songbookDualPage) {
-              layoutStore.songbookDualPage = true;
+              layoutStore.setSongbookViewMode(true, true);
             } else {
-              layoutStore.songbookPaginated = false;
-              layoutStore.songbookDualPage = false;
+              layoutStore.setSongbookViewMode(false, false);
               layoutStore.songbookPage = 0;
             }
           })()"
@@ -159,8 +157,6 @@ onUnmounted(() => {
 
 watch(route, () => {
   layoutStore.songbookMode = false;
-  layoutStore.songbookPaginated = false;
-  layoutStore.songbookDualPage = false;
   fetchData();
 });
 watch(reload, (newValue) => {

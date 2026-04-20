@@ -19,8 +19,8 @@ export const useLayoutStore = defineStore("layout", {
     prompts: [],
     showShell: false,
     songbookMode: false,
-    songbookPaginated: false,
-    songbookDualPage: false,
+    songbookPaginated: localStorage.getItem("songbookPaginated") === "true",
+    songbookDualPage: localStorage.getItem("songbookDualPage") === "true",
     songbookPage: 0,
     songbookCurrentTitle: "",
     songbookTotalPages: 0,
@@ -89,6 +89,12 @@ export const useLayoutStore = defineStore("layout", {
     },
     closeHovers() {
       this.prompts.pop()?.close?.();
+    },
+    setSongbookViewMode(paginated: boolean, dualPage: boolean) {
+      this.songbookPaginated = paginated;
+      this.songbookDualPage = dualPage;
+      localStorage.setItem("songbookPaginated", String(paginated));
+      localStorage.setItem("songbookDualPage", String(dualPage));
     },
     // easily reset state using `$reset`
     clearLayout() {

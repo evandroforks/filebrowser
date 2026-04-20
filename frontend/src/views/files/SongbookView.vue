@@ -72,7 +72,7 @@
         class="songbook-page"
         :data-song-title="song.title"
       >
-        <h2 class="song-title">{{ song.title }}</h2>
+        <h2 :id="'song-' + song.name" class="song-title">{{ song.title }}</h2>
         <div class="cifra-content">
           <div
             v-for="(line, lineIndex) in parsedLines(song.content)"
@@ -298,16 +298,48 @@ watch(currentSubPage, (page) => {
   layoutStore.songbookCurrentTitle = `${title} — ${pageLabel}${subLabel}`;
 }, { immediate: true });
 
+let _firstSongsLoad = true;
+let _savedPageToRestore = -1;
+let _restoringPage = false;
 watch(songs, async () => {
+  const isFirst = _firstSongsLoad;
+  _firstSongsLoad = false;
+  if (isFirst) {
+    _savedPageToRestore = parseInt(localStorage.getItem(storageKeyPage()) ?? "-1");
+  }
   layoutStore.songbookPage = 0;
   measuredLinesPerPage = 0;
   if (layoutStore.songbookPaginated) {
     await nextTick();
     attachResizeObserver();
     await measureAndBuild();
+    if (isFirst && _savedPageToRestore >= 0 && _savedPageToRestore < layoutStore.songbookTotalPages) {
+      _restoringPage = true;
+      layoutStore.songbookPage = _savedPageToRestore;
+      _restoringPage = false;
+    }
+    _savedPageToRestore = -1;
   } else {
+    _savedPageToRestore = -1;
     await nextTick();
     attachSongIntersectionObserver();
+    if (isFirst) {
+      const savedSong = localStorage.getItem(storageKeySong());
+      if (savedSong && continuousContainerRef.value) {
+        await nextTick();
+        const pages = continuousContainerRef.value.querySelectorAll<HTMLElement>('[data-song-title]');
+        const page = Array.from(pages).find(el => el.dataset.songTitle === savedSong);
+        if (page) {
+          const heading = page.querySelector('.song-title') as HTMLElement | null;
+          if (heading) {
+            const headerEl = document.querySelector('.breadcrumbs') as HTMLElement | null;
+            const headerH = headerEl ? headerEl.getBoundingClientRect().bottom : 0;
+            const top = heading.getBoundingClientRect().top + window.scrollY - headerH;
+            window.scrollTo({ top, behavior: 'instant' as ScrollBehavior });
+          }
+        }
+      }
+    }
   }
 });
 
@@ -325,6 +357,13 @@ watch(() => layoutStore.songbookPaginated, async (val) => {
     probeLines.value = [];
     await nextTick();
     attachSongIntersectionObserver();
+  }
+});
+
+// Persist page when the user navigates (skip internal resets during restore)
+watch(() => layoutStore.songbookPage, (val) => {
+  if (layoutStore.songbookPaginated && !_restoringPage) {
+    localStorage.setItem(storageKeyPage(), String(val));
   }
 });
 
@@ -408,6 +447,18 @@ const NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#',
 const NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
 const STORAGE_KEY = 'songbook-transpose';
+const STORAGE_KEY_PAGE_PREFIX = 'songbook-page:';
+const STORAGE_KEY_SONG_PREFIX = 'songbook-song:';
+
+function currentFolder(): string {
+  return fileStore.req?.path ?? '/';
+}
+function storageKeyPage(): string {
+  return STORAGE_KEY_PAGE_PREFIX + currentFolder();
+}
+function storageKeySong(): string {
+  return STORAGE_KEY_SONG_PREFIX + currentFolder();
+}
 
 // Map of song title → semitones offset
 const transposeMap = ref<Record<string, number>>({});
@@ -436,6 +487,7 @@ watch(scrollVisibleTitle, (title) => {
   const total = songs.value.length;
   const label = idx >= 0 ? `${idx + 1} / ${total}` : '';
   layoutStore.songbookCurrentTitle = `${title} — ${label}`;
+  localStorage.setItem(storageKeySong(), title);
 });
 
 function attachSongIntersectionObserver() {
