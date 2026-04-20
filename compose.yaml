@@ -8,6 +8,9 @@ services:
       - 8000:80
     volumes:
       - filebrowser:/flux/vault
+      # Mount the locally built binary from the dev container (run `task build` first)
+      # Comment this out to use the image's built-in binary instead
+      # - ./filebrowser:/bin/filebrowser:ro
     environment:
       - FB_REDIS_CACHE_URL=redis://default:filebrowser@redis:6379 # Use rediss:// for ssl
 

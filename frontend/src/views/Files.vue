@@ -45,11 +45,6 @@
             }
           })()"
         />
-        <action
-          icon="print"
-          label="Print"
-          @action="printSongbook"
-        />
       </template>
     </breadcrumbs>
     <errors v-if="error" :errorCode="error.status" />
@@ -108,8 +103,6 @@ const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
 
 const layoutStore = useLayoutStore();
 const fileStore = useFileStore();
-
-const printSongbook = () => window.print();
 
 const { reload } = storeToRefs(fileStore);
 
